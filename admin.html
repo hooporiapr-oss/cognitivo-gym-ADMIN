@@ -113,7 +113,7 @@
   <!-- DASHBOARD -->
   <div id="dash">
     <div class="prod-tabs">
-      <button class="prod-tab active" id="tab-hooporia" onclick="switchProduct('hooporia')">🎯 Dynamic Memory</button>
+      <button class="prod-tab active" id="tab-hooporia" onclick="switchProduct('hooporia')">🎯 Cognitivo Gym</button>
       <button class="prod-tab" id="tab-fortress-mobile" onclick="switchProduct('fortress-mobile')">🧩 Fortress Mobile</button>
     </div>
     <div class="prod-note" id="prod-note"></div>
@@ -165,7 +165,9 @@
 //
 //  PRODUCT SCOPES, after the merge:
 //
-//    hooporia        — Dynamic Memory. One code now opens the
+//    hooporia        — Cognitivo Gym (was "Dynamic Memory"; the
+//                      product key stays 'hooporia' so every code
+//                      keeps working). One code opens the five
 //                      memory games, Ritnome, and both standings
 //                      boards. This is the product sold through
 //                      Basketball Money, and the one to issue for
@@ -192,8 +194,8 @@ var DEVICE_COUNTS = {};
 
 var PRODUCTS = {
   'hooporia': {
-    label: '(Dynamic Memory)',
-    note: 'One code opens the memory games, Ritnome and both standings boards. This is what Basketball Money sells, and what to issue for trials and comps.'
+    label: '(Cognitivo Gym)',
+    note: 'One code opens the five Cognitivo Gym games, Ritnome and both standings boards. This is what Basketball Money sells, and what to issue for trials and comps.'
   },
   'fortress-mobile': {
     label: '(Fortress Mobile)',
@@ -315,6 +317,8 @@ var STANDINGS_BY_PRODUCT = {
   'hooporia': [
     { name: 'The Fortress', table: 'dynamic_memory_quarter_standings', gameKey: 'fortress' },
     { name: 'Recall', table: 'dynamic_memory_quarter_standings', gameKey: 'recall' },
+    { name: 'Reflex', table: 'dynamic_memory_quarter_standings', gameKey: 'reflex' },
+    { name: 'Replay', table: 'dynamic_memory_quarter_standings', gameKey: 'replay' },
     { name: 'Recognition', table: 'dynamic_memory_quarter_standings', gameKey: 'recognition' },
     { name: 'Ritnome (all patterns)', table: 'ritnome_standings' }
   ],
