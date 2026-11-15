@@ -114,6 +114,7 @@
   <div id="dash">
     <div class="prod-tabs">
       <button class="prod-tab active" id="tab-hooporia" onclick="switchProduct('hooporia')">🎯 Cognitivo Gym</button>
+      <button class="prod-tab" id="tab-reaction-velocity" onclick="switchProduct('reaction-velocity')">⚡ Reaction Velocity</button>
       <button class="prod-tab" id="tab-fortress-mobile" onclick="switchProduct('fortress-mobile')">🧩 Fortress Mobile</button>
     </div>
     <div class="prod-note" id="prod-note"></div>
@@ -172,6 +173,9 @@
 //                      boards. This is the product sold through
 //                      Basketball Money, and the one to issue for
 //                      trials and comps.
+//    reaction-velocity — Reaction Velocity (repo reaction-velocity).
+//                      Its own access page and its own codes: one
+//                      code opens its six games and Final Score.
 //    fortress-mobile — The Fortress Mobile. Still its own separate
 //                      site with its own separate gate.
 //
@@ -196,6 +200,10 @@ var PRODUCTS = {
   'hooporia': {
     label: '(Cognitivo Gym)',
     note: 'One code opens the five Cognitivo Gym games, Ritnome and both standings boards. This is what Basketball Money sells, and what to issue for trials and comps.'
+  },
+  'reaction-velocity': {
+    label: '(Reaction Velocity)',
+    note: 'Its own site and its own codes. One code opens the six Reaction Velocity games and their Final Score board.'
   },
   'fortress-mobile': {
     label: '(Fortress Mobile)',
@@ -321,6 +329,15 @@ var STANDINGS_BY_PRODUCT = {
     { name: 'Replay', table: 'dynamic_memory_quarter_standings', gameKey: 'replay' },
     { name: 'Recognition', table: 'dynamic_memory_quarter_standings', gameKey: 'recognition' },
     { name: 'Ritnome (all patterns)', table: 'ritnome_standings' }
+  ],
+  'reaction-velocity': [
+    { name: 'Reaction Speed', table: 'vr_reaction_speed_standings' },
+    { name: 'Reactific', table: 'vr_reactific_standings' },
+    { name: 'Shoot It. Own It.', table: 'vr_shoot_it_own_it_standings' },
+    { name: 'Make It Count.', table: 'vr_make_it_count_standings' },
+    { name: 'Chain Reaction', table: 'vr_chain_reaction_standings' },
+    { name: 'Flashpoint', table: 'vr_flashpoint_standings' },
+    { name: 'Final Score', table: 'reaction_velocity_standings' }
   ],
   'fortress-mobile': [
     { name: 'The Fortress (Mobile)', table: 'ritnome_mobile_fortress_standings' }
