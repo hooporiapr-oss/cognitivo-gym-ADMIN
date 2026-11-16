@@ -433,23 +433,38 @@ window.confirmStandingsReset = async function(safeId, gameName, actualTable, gam
 // ── one spelling per school ──
 // The school name is how players, BPM, progress and standings line up
 // between products (a school's Reaction Velocity and Cognitivo Gym codes
-// must carry the very same name). So the name is picked from the schools
-// already set up under ANY product; "＋ New school" is only for a school
-// that has no code anywhere yet — and a new name that is the same as one
-// already there (apart from capitals and spaces) takes the existing one.
+// must carry the very same name). The dropdown reads the official school
+// list (license_schools — license-schools.sql), which started empty on
+// 11/16: a school joins it the first time it is added with "＋ New
+// school…", and every later code for it is picked from the list. A new
+// name that is the same as one on the list (apart from capitals and
+// spaces) takes the listed one. Each listed school shows which products
+// it has codes under.
 var ALL_SCHOOLS = {};   // name → the products it has codes under
 function schoolKey(n){ return String(n||'').toLowerCase().replace(/\s+/g,' ').trim(); }
 async function loadAllSchools(){
   try{
-    var r = await fetch(SUPABASE_URL + '/rest/v1/licenses?select=school_name,product', { headers: authHeaders() });
+    var r = await fetch(SUPABASE_URL + '/rest/v1/license_schools?select=name&order=name.asc', { headers: authHeaders() });
     if (!r.ok) return;
-    var rows = await r.json(); ALL_SCHOOLS = {};
-    (rows||[]).forEach(function(x){
-      if (!x.school_name) return;
+    var list = await r.json(), out = {};
+    (list||[]).forEach(function(x){ if (x.name) out[x.name] = []; });
+    var lr = await fetch(SUPABASE_URL + '/rest/v1/licenses?select=school_name,product', { headers: authHeaders() });
+    if (lr.ok) (await lr.json()||[]).forEach(function(x){
+      if (!out[x.school_name]) return;
       var lbl = (PRODUCTS[x.product] && PRODUCTS[x.product].label || x.product || '').replace(/[()]/g,'');
-      (ALL_SCHOOLS[x.school_name] = ALL_SCHOOLS[x.school_name] || []);
-      if (lbl && ALL_SCHOOLS[x.school_name].indexOf(lbl) === -1) ALL_SCHOOLS[x.school_name].push(lbl);
+      if (lbl && out[x.school_name].indexOf(lbl) === -1) out[x.school_name].push(lbl);
     });
+    ALL_SCHOOLS = out;
+  }catch(e){}
+}
+// a new school joins the official list
+async function listSchool(name){
+  if (!name || ALL_SCHOOLS[name]) return;
+  try{
+    await fetch(SUPABASE_URL + '/rest/v1/license_schools', { method: 'POST',
+      headers: Object.assign({}, authHeaders(), { 'Prefer': 'resolution=ignore-duplicates,return=minimal' }),
+      body: JSON.stringify({ name: name }) });
+    ALL_SCHOOLS[name] = [];
   }catch(e){}
 }
 function schoolOptions(current){
@@ -609,6 +624,7 @@ window.addLicense = async function(){
       setAddMsg(errBody.code==='23505' ? 'That code already exists' : (errBody.message || 'Could not add license'), 'bad');
       return;
     }
+    if ($('a-school-pick').value === '__new') await listSchool(school);
     $('a-code').value=''; $('a-school').value=''; $('a-school').style.display='none'; $('a-school-pick').value=''; $('a-cat').value=''; $('a-expires').value=''; $('a-notes').value='';
     setAddMsg(pickedSchool.matched ? '✓ License added — under the school already set up as "'+school+'"' : '✓ License added','ok');
     loadLicenses();
@@ -630,6 +646,7 @@ window.cancelEdit = function(){
 
 window.saveEdit = async function(id){
   var code = $('edit-code-'+id).value.trim().toUpperCase();
+  var editNew = $('edit-school-pick-'+id).value === '__new';
   var school = schoolFrom('edit-school-pick-'+id,'edit-school-'+id).name;
   var category = $('edit-cat-'+id).value.trim() || null;
   var expires = $('edit-expires-'+id).value || null;
@@ -647,6 +664,7 @@ window.saveEdit = async function(id){
       alert(errBody.code==='23505' ? 'That code already exists' : (errBody.message || 'Error saving changes'));
       return;
     }
+    if (editNew) await listSchool(school);
     editingId = null;
     loadLicenses();
   }catch(e){ alert('Connection problem — please try again'); }
