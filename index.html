@@ -126,7 +126,7 @@
         <div class="add-row">
           <div class="af"><label>Code</label><input id="a-code" placeholder="LINCOLN-PREP-2026" maxlength="40"></div>
           <div class="af"><label>School Name</label><select id="a-school-pick" onchange="schoolPicked('a-school-pick','a-school')"></select><input id="a-school" placeholder="New school's name" maxlength="60" style="display:none;margin-top:6px"></div>
-          <div class="af"><label>Category (optional)</label><input id="a-cat" placeholder="5-6 años" maxlength="30"></div>
+          <div class="af"><label>Category (optional)</label><select id="a-cat-pick" onchange="schoolPicked('a-cat-pick','a-cat')"></select><input id="a-cat" placeholder="New category, e.g. 19-20 años" maxlength="30" style="display:none;margin-top:6px"></div>
           <div class="af"><label>Expires</label><input id="a-expires" type="date"></div>
           <div class="af"><label>&nbsp;</label><button class="year-btn" onclick="setOneYear()">+1 year</button></div>
           <div class="af"><label>Notes (optional)</label><input id="a-notes" placeholder="e.g. 30-day trial, comp, paid annual" maxlength="80"></div>
@@ -457,6 +457,44 @@ async function loadAllSchools(){
     ALL_SCHOOLS = out;
   }catch(e){}
 }
+// ── one spelling per category (license_categories — license-categories.sql) ──
+var ALL_CATS = [];
+function catSort(a,b){ var x=parseInt(a,10), y=parseInt(b,10); if(!isNaN(x)&&!isNaN(y)&&x!==y) return x-y; return a.localeCompare(b,'es',{sensitivity:'base'}); }
+async function loadAllCats(){
+  try{
+    var r = await fetch(SUPABASE_URL + '/rest/v1/license_categories?select=name', { headers: authHeaders() });
+    if (!r.ok) return;
+    ALL_CATS = (await r.json()||[]).map(function(x){ return x.name; }).filter(Boolean).sort(catSort);
+  }catch(e){}
+}
+function catOptions(current){
+  var names = ALL_CATS.slice();
+  if (current && names.indexOf(current) === -1) names.push(current);
+  names.sort(catSort);
+  return '<option value="">No category</option>'
+    + names.map(function(n){ return '<option value="'+esc(n)+'"'+(n===current?' selected':'')+'>'+esc(n)+'</option>'; }).join('')
+    + '<option value="__new">＋ New category…</option>';
+}
+// the category to save: the one picked, a new one (a listed spelling wins), or none
+function catFrom(selId, inpId){
+  var v = $(selId).value;
+  if (v !== '__new') return { name: v || null };
+  var n = $(inpId).value.trim().replace(/\s+/g,' ');
+  if (!n) return { name: null };
+  var k = schoolKey(n), same = ALL_CATS.filter(function(x){ return schoolKey(x) === k; })[0];
+  return same ? { name: same } : { name: n, isNew: true };
+}
+async function listCat(name){
+  if (!name || ALL_CATS.indexOf(name) !== -1) return;
+  try{
+    await fetch(SUPABASE_URL + '/rest/v1/license_categories', { method: 'POST',
+      headers: Object.assign({}, authHeaders(), { 'Prefer': 'resolution=ignore-duplicates,return=minimal' }),
+      body: JSON.stringify({ name: name }) });
+    ALL_CATS.push(name); ALL_CATS.sort(catSort);
+  }catch(e){}
+}
+function fillAddCats(){ var keep = $('a-cat-pick').value; $('a-cat-pick').innerHTML = catOptions(); if (keep && (keep==='__new' || ALL_CATS.indexOf(keep)!==-1)) $('a-cat-pick').value = keep; }
+
 // a new school joins the official list
 async function listSchool(name){
   if (!name || ALL_SCHOOLS[name]) return;
@@ -492,7 +530,7 @@ function fillAddSchools(){ var keep = $('a-school-pick').value; $('a-school-pick
 
 // ── licenses ──
 window.loadLicenses = async function(){
-  await loadAllSchools(); fillAddSchools();
+  await loadAllSchools(); fillAddSchools(); await loadAllCats(); fillAddCats();
   var tbody = $('rows');
   tbody.innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
   try{
@@ -562,7 +600,8 @@ function renderRows(data, tbody){
         + '<td><input id="edit-code-'+r.id+'" value="'+esc(r.code)+'" style="width:100%"></td>'
         + '<td><select id="edit-school-pick-'+r.id+'" onchange="schoolPicked(\'edit-school-pick-'+r.id+'\',\'edit-school-'+r.id+'\')" style="width:100%">'+schoolOptions(r.school_name||'')+'</select>'
           + '<input id="edit-school-'+r.id+'" placeholder="New school\'s name" maxlength="60" style="width:100%;margin-top:4px;display:none">'
-          + '<input id="edit-cat-'+r.id+'" value="'+esc(r.category||'')+'" placeholder="Category (optional)" maxlength="30" style="width:100%;margin-top:4px"></td>'
+          + '<select id="edit-cat-pick-'+r.id+'" onchange="schoolPicked(\'edit-cat-pick-'+r.id+'\',\'edit-cat-'+r.id+'\')" style="width:100%;margin-top:4px">'+catOptions(r.category||'')+'</select>'
+          + '<input id="edit-cat-'+r.id+'" placeholder="New category" maxlength="30" style="width:100%;margin-top:4px;display:none"></td>'
         + '<td><input id="edit-expires-'+r.id+'" type="date" value="'+esc(r.expires_at||'')+'" style="width:100%"></td>'
         + '<td>'+statusPill+'</td>'
         + '<td></td>'
@@ -608,7 +647,7 @@ function renderRows(data, tbody){
 window.addLicense = async function(){
   var code = $('a-code').value.trim().toUpperCase();
   var pickedSchool = schoolFrom('a-school-pick','a-school'), school = pickedSchool.name;
-  var category = $('a-cat').value.trim() || null;
+  var pickedCat = catFrom('a-cat-pick','a-cat'), category = pickedCat.name;
   var expires = $('a-expires').value || null;
   var notes = $('a-notes').value.trim() || null;
   if (!code){ setAddMsg('Enter a code','bad'); return; }
@@ -625,7 +664,8 @@ window.addLicense = async function(){
       return;
     }
     if ($('a-school-pick').value === '__new') await listSchool(school);
-    $('a-code').value=''; $('a-school').value=''; $('a-school').style.display='none'; $('a-school-pick').value=''; $('a-cat').value=''; $('a-expires').value=''; $('a-notes').value='';
+    if (pickedCat.isNew) await listCat(category);
+    $('a-code').value=''; $('a-school').value=''; $('a-school').style.display='none'; $('a-school-pick').value=''; $('a-cat').value=''; $('a-cat').style.display='none'; $('a-cat-pick').value=''; $('a-expires').value=''; $('a-notes').value='';
     setAddMsg(pickedSchool.matched ? '✓ License added — under the school already set up as "'+school+'"' : '✓ License added','ok');
     loadLicenses();
   }catch(e){
@@ -648,7 +688,7 @@ window.saveEdit = async function(id){
   var code = $('edit-code-'+id).value.trim().toUpperCase();
   var editNew = $('edit-school-pick-'+id).value === '__new';
   var school = schoolFrom('edit-school-pick-'+id,'edit-school-'+id).name;
-  var category = $('edit-cat-'+id).value.trim() || null;
+  var editCat = catFrom('edit-cat-pick-'+id,'edit-cat-'+id), category = editCat.name;
   var expires = $('edit-expires-'+id).value || null;
   var notes = $('edit-notes-'+id).value.trim() || null;
   if (!code){ alert('Enter a code'); return; }
@@ -664,6 +704,7 @@ window.saveEdit = async function(id){
       alert(errBody.code==='23505' ? 'That code already exists' : (errBody.message || 'Error saving changes'));
       return;
     }
+    if (editCat.isNew) await listCat(category);
     if (editNew) await listSchool(school);
     editingId = null;
     loadLicenses();
