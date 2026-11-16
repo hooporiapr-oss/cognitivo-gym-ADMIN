@@ -42,7 +42,8 @@
   .af label{font-size:.6rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#8892a0}
   .af input{padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.92);color:#222;font-size:.95rem;font-weight:600}
   .af input#a-code{width:200px;text-transform:uppercase}
-  .af input#a-school{width:220px}
+  .af input#a-school,.af select#a-school-pick{width:240px}
+  .af select,td select{background:#0d1520;color:#fff;border:1.5px solid rgba(255,255,255,.18);border-radius:8px;padding:8px;font:inherit;font-size:.85rem}
   .add-btn{padding:11px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#00d9a5,#00a884);color:#062;font-weight:900;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;font-size:.85rem}
   .year-btn{padding:11px 14px;border:1px solid rgba(0,140,255,.35);border-radius:8px;background:rgba(0,140,255,.12);color:#4db8ff;font-weight:800;cursor:pointer;font-size:.78rem}
 
@@ -124,7 +125,7 @@
         <div class="add-title">➕ Add a License <span id="add-product-label"></span></div>
         <div class="add-row">
           <div class="af"><label>Code</label><input id="a-code" placeholder="LINCOLN-PREP-2026" maxlength="40"></div>
-          <div class="af"><label>School Name</label><input id="a-school" placeholder="Lincoln Prep Academy" maxlength="60"></div>
+          <div class="af"><label>School Name</label><select id="a-school-pick" onchange="schoolPicked('a-school-pick','a-school')"></select><input id="a-school" placeholder="New school's name" maxlength="60" style="display:none;margin-top:6px"></div>
           <div class="af"><label>Category (optional)</label><input id="a-cat" placeholder="5-6 años" maxlength="30"></div>
           <div class="af"><label>Expires</label><input id="a-expires" type="date"></div>
           <div class="af"><label>&nbsp;</label><button class="year-btn" onclick="setOneYear()">+1 year</button></div>
@@ -429,8 +430,54 @@ window.confirmStandingsReset = async function(safeId, gameName, actualTable, gam
   }
 };
 
+// ── one spelling per school ──
+// The school name is how players, BPM, progress and standings line up
+// between products (a school's Reaction Velocity and Cognitivo Gym codes
+// must carry the very same name). So the name is picked from the schools
+// already set up under ANY product; "＋ New school" is only for a school
+// that has no code anywhere yet — and a new name that is the same as one
+// already there (apart from capitals and spaces) takes the existing one.
+var ALL_SCHOOLS = {};   // name → the products it has codes under
+function schoolKey(n){ return String(n||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+async function loadAllSchools(){
+  try{
+    var r = await fetch(SUPABASE_URL + '/rest/v1/licenses?select=school_name,product', { headers: authHeaders() });
+    if (!r.ok) return;
+    var rows = await r.json(); ALL_SCHOOLS = {};
+    (rows||[]).forEach(function(x){
+      if (!x.school_name) return;
+      var lbl = (PRODUCTS[x.product] && PRODUCTS[x.product].label || x.product || '').replace(/[()]/g,'');
+      (ALL_SCHOOLS[x.school_name] = ALL_SCHOOLS[x.school_name] || []);
+      if (lbl && ALL_SCHOOLS[x.school_name].indexOf(lbl) === -1) ALL_SCHOOLS[x.school_name].push(lbl);
+    });
+  }catch(e){}
+}
+function schoolOptions(current){
+  var names = Object.keys(ALL_SCHOOLS);
+  if (current && names.indexOf(current) === -1) names.push(current);
+  names.sort(function(a,b){ return a.localeCompare(b,'es',{sensitivity:'base'}); });
+  return '<option value="">Choose a school…</option>'
+    + names.map(function(n){ var p = ALL_SCHOOLS[n]||[]; return '<option value="'+esc(n)+'"'+(n===current?' selected':'')+'>'+esc(n)+(p.length?' — '+esc(p.join(', ')):'')+'</option>'; }).join('')
+    + '<option value="__new">＋ New school…</option>';
+}
+window.schoolPicked = function(selId, inpId){
+  var nueva = $(selId).value === '__new';
+  $(inpId).style.display = nueva ? 'block' : 'none';
+  if (nueva) $(inpId).focus();
+};
+// the school name to save: the one picked, or a new one (an existing spelling wins)
+function schoolFrom(selId, inpId){
+  var v = $(selId).value;
+  if (v !== '__new') return { name: v };
+  var n = $(inpId).value.trim().replace(/\s+/g,' ');
+  var k = schoolKey(n), same = Object.keys(ALL_SCHOOLS).filter(function(x){ return schoolKey(x) === k; })[0];
+  return same ? { name: same, matched: true } : { name: n };
+}
+function fillAddSchools(){ var keep = $('a-school-pick').value; $('a-school-pick').innerHTML = schoolOptions(); if (keep && (keep==='__new' || ALL_SCHOOLS[keep])) $('a-school-pick').value = keep; }
+
 // ── licenses ──
 window.loadLicenses = async function(){
+  await loadAllSchools(); fillAddSchools();
   var tbody = $('rows');
   tbody.innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
   try{
@@ -498,7 +545,8 @@ function renderRows(data, tbody){
     if (r.id === editingId){
       return '<tr>'
         + '<td><input id="edit-code-'+r.id+'" value="'+esc(r.code)+'" style="width:100%"></td>'
-        + '<td><input id="edit-school-'+r.id+'" value="'+esc(r.school_name||'')+'" style="width:100%">'
+        + '<td><select id="edit-school-pick-'+r.id+'" onchange="schoolPicked(\'edit-school-pick-'+r.id+'\',\'edit-school-'+r.id+'\')" style="width:100%">'+schoolOptions(r.school_name||'')+'</select>'
+          + '<input id="edit-school-'+r.id+'" placeholder="New school\'s name" maxlength="60" style="width:100%;margin-top:4px;display:none">'
           + '<input id="edit-cat-'+r.id+'" value="'+esc(r.category||'')+'" placeholder="Category (optional)" maxlength="30" style="width:100%;margin-top:4px"></td>'
         + '<td><input id="edit-expires-'+r.id+'" type="date" value="'+esc(r.expires_at||'')+'" style="width:100%"></td>'
         + '<td>'+statusPill+'</td>'
@@ -544,12 +592,12 @@ function renderRows(data, tbody){
 
 window.addLicense = async function(){
   var code = $('a-code').value.trim().toUpperCase();
-  var school = $('a-school').value.trim();
+  var pickedSchool = schoolFrom('a-school-pick','a-school'), school = pickedSchool.name;
   var category = $('a-cat').value.trim() || null;
   var expires = $('a-expires').value || null;
   var notes = $('a-notes').value.trim() || null;
   if (!code){ setAddMsg('Enter a code','bad'); return; }
-  if (!school){ setAddMsg('Enter a school name','bad'); return; }
+  if (!school){ setAddMsg($('a-school-pick').value==='__new' ? 'Type the new school\'s name' : 'Choose a school','bad'); return; }
   try{
     var r = await fetch(SUPABASE_URL + '/rest/v1/licenses', {
       method: 'POST',
@@ -561,8 +609,8 @@ window.addLicense = async function(){
       setAddMsg(errBody.code==='23505' ? 'That code already exists' : (errBody.message || 'Could not add license'), 'bad');
       return;
     }
-    $('a-code').value=''; $('a-school').value=''; $('a-cat').value=''; $('a-expires').value=''; $('a-notes').value='';
-    setAddMsg('✓ License added','ok');
+    $('a-code').value=''; $('a-school').value=''; $('a-school').style.display='none'; $('a-school-pick').value=''; $('a-cat').value=''; $('a-expires').value=''; $('a-notes').value='';
+    setAddMsg(pickedSchool.matched ? '✓ License added — under the school already set up as "'+school+'"' : '✓ License added','ok');
     loadLicenses();
   }catch(e){
     setAddMsg('Connection problem — please try again','bad');
@@ -582,12 +630,12 @@ window.cancelEdit = function(){
 
 window.saveEdit = async function(id){
   var code = $('edit-code-'+id).value.trim().toUpperCase();
-  var school = $('edit-school-'+id).value.trim();
+  var school = schoolFrom('edit-school-pick-'+id,'edit-school-'+id).name;
   var category = $('edit-cat-'+id).value.trim() || null;
   var expires = $('edit-expires-'+id).value || null;
   var notes = $('edit-notes-'+id).value.trim() || null;
   if (!code){ alert('Enter a code'); return; }
-  if (!school){ alert('Enter a school name'); return; }
+  if (!school){ alert('Choose a school, or type the new school\'s name'); return; }
   try{
     var r = await fetch(SUPABASE_URL + '/rest/v1/licenses?id=eq.' + encodeURIComponent(id), {
       method: 'PATCH',
