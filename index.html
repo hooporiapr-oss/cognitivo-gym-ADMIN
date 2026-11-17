@@ -61,6 +61,7 @@
   .pill.inactive{background:rgba(255,107,107,.18);color:#ff8888}
   .pill.expired{background:rgba(255,180,80,.18);color:#ffb450}
   .pill.sold{background:rgba(124,58,237,.2);color:#c4b5fd;margin-left:6px}
+  .pill.plain{background:rgba(255,255,255,.1);color:#c8ccd4;margin-left:8px;text-transform:none}
   .pill.cat{background:rgba(61,220,114,.16);color:#3ddc72;margin-left:8px;text-transform:none}
   .exp-soon{color:#ffb450;font-weight:700}
   .exp-never{color:#ffb450}
@@ -128,6 +129,7 @@
           <div class="af"><label>Code</label><input id="a-code" placeholder="LINCOLN-PREP-2026" maxlength="40"></div>
           <div class="af"><label>School Name</label><select id="a-school-pick" onchange="schoolPicked('a-school-pick','a-school')"></select><input id="a-school" placeholder="New school's name" maxlength="60" style="display:none;margin-top:6px"></div>
           <div class="af"><label>Category (optional)</label><select id="a-cat-pick" onchange="schoolPicked('a-cat-pick','a-cat')"></select><input id="a-cat" placeholder="New category, e.g. 19-20 años" maxlength="30" style="display:none;margin-top:6px"></div>
+          <div class="af"><label>Targets</label><select id="a-look"><option value="">🏀 Basketballs (clubs)</option><option value="plain">● Plain circles (schools)</option></select></div>
           <div class="af"><label>Expires</label><input id="a-expires" type="date"></div>
           <div class="af"><label>&nbsp;</label><button class="year-btn" onclick="setOneYear()">+1 year</button></div>
           <div class="af"><label>Notes (optional)</label><input id="a-notes" placeholder="e.g. 30-day trial, comp, paid annual" maxlength="80"></div>
@@ -609,7 +611,8 @@ function renderRows(data, tbody){
         + '<td><select id="edit-school-pick-'+r.id+'" onchange="schoolPicked(\'edit-school-pick-'+r.id+'\',\'edit-school-'+r.id+'\')" style="width:100%">'+schoolOptions(r.school_name||'')+'</select>'
           + '<input id="edit-school-'+r.id+'" placeholder="New school\'s name" maxlength="60" style="width:100%;margin-top:4px;display:none">'
           + '<select id="edit-cat-pick-'+r.id+'" onchange="schoolPicked(\'edit-cat-pick-'+r.id+'\',\'edit-cat-'+r.id+'\')" style="width:100%;margin-top:4px">'+catOptions(r.category||'')+'</select>'
-          + '<input id="edit-cat-'+r.id+'" placeholder="New category" maxlength="30" style="width:100%;margin-top:4px;display:none"></td>'
+          + '<input id="edit-cat-'+r.id+'" placeholder="New category" maxlength="30" style="width:100%;margin-top:4px;display:none">'
+          + '<select id="edit-look-'+r.id+'" style="width:100%;margin-top:4px"><option value="">🏀 Basketballs (clubs)</option><option value="plain"'+(r.plain_targets?' selected':'')+'>● Plain circles (schools)</option></select></td>'
         + '<td><input id="edit-expires-'+r.id+'" type="date" value="'+esc(r.expires_at||'')+'" style="width:100%"></td>'
         + '<td>'+statusPill+'</td>'
         + '<td></td>'
@@ -636,7 +639,7 @@ function renderRows(data, tbody){
 
     return '<tr>'
       + '<td class="code-cell">'+esc(r.code)+'</td>'
-      + '<td>'+esc(r.school_name||'')+(r.category ? '<span class="pill cat">'+esc(r.category)+'</span>' : '')+'</td>'
+      + '<td>'+esc(r.school_name||'')+(r.category ? '<span class="pill cat">'+esc(r.category)+'</span>' : '')+(r.plain_targets ? '<span class="pill plain">● Plain circles</span>' : '')+'</td>'
       + '<td>'+expText+'</td>'
       + '<td>'+statusPill+'</td>'
       + '<td style="font-size:.82rem">'+devText+'</td>'
@@ -664,7 +667,7 @@ window.addLicense = async function(){
     var r = await fetch(SUPABASE_URL + '/rest/v1/licenses', {
       method: 'POST',
       headers: Object.assign({}, authHeaders(), { 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ code: code, school_name: school, category: category, expires_at: expires, notes: notes, active: true, product: currentProduct })
+      body: JSON.stringify({ code: code, school_name: school, category: category, plain_targets: $('a-look').value === 'plain', expires_at: expires, notes: notes, active: true, product: currentProduct })
     });
     if (!r.ok){
       var errBody = await r.json().catch(function(){ return {}; });
@@ -673,7 +676,7 @@ window.addLicense = async function(){
     }
     if ($('a-school-pick').value === '__new') await listSchool(school);
     if (pickedCat.isNew) await listCat(category);
-    $('a-code').value=''; $('a-school').value=''; $('a-school').style.display='none'; $('a-school-pick').value=''; $('a-cat').value=''; $('a-cat').style.display='none'; $('a-cat-pick').value=''; $('a-expires').value=''; $('a-notes').value='';
+    $('a-code').value=''; $('a-school').value=''; $('a-school').style.display='none'; $('a-school-pick').value=''; $('a-cat').value=''; $('a-cat').style.display='none'; $('a-cat-pick').value=''; $('a-look').value=''; $('a-expires').value=''; $('a-notes').value='';
     setAddMsg(pickedSchool.matched ? '✓ License added — under the school already set up as "'+school+'"' : '✓ License added','ok');
     loadLicenses();
   }catch(e){
@@ -705,7 +708,7 @@ window.saveEdit = async function(id){
     var r = await fetch(SUPABASE_URL + '/rest/v1/licenses?id=eq.' + encodeURIComponent(id), {
       method: 'PATCH',
       headers: Object.assign({}, authHeaders(), { 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ code: code, school_name: school, category: category, expires_at: expires, notes: notes })
+      body: JSON.stringify({ code: code, school_name: school, category: category, plain_targets: $('edit-look-'+id).value === 'plain', expires_at: expires, notes: notes })
     });
     if (!r.ok){
       var errBody = await r.json().catch(function(){ return {}; });
