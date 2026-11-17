@@ -117,6 +117,7 @@
       <button class="prod-tab active" id="tab-hooporia" onclick="switchProduct('hooporia')">🎯 Cognitivo Gym</button>
       <button class="prod-tab" id="tab-reaction-velocity" onclick="switchProduct('reaction-velocity')">⚡ Reaction Velocity</button>
       <button class="prod-tab" id="tab-fortress-mobile" onclick="switchProduct('fortress-mobile')">🧩 Fortress Mobile</button>
+      <button class="prod-tab" id="tab-coach" onclick="switchProduct('coach')">🧑‍🏫 Coach</button>
     </div>
     <div class="prod-note" id="prod-note"></div>
 
@@ -179,6 +180,9 @@
 //                      code opens its six games and Final Score.
 //    fortress-mobile — The Fortress Mobile. Still its own separate
 //                      site with its own separate gate.
+//    coach           — coach codes: open the coach view (the school's
+//                      players, speeds, chains, progress) on vreaction.com
+//                      and in Cognitivo Gym. Game codes never open it.
 //
 //  The old pre-merge scopes (ritnome, hooporia-standings,
 //  ritnome-standings) are gone from this panel. Any rows still
@@ -205,6 +209,10 @@ var PRODUCTS = {
   'reaction-velocity': {
     label: '(Reaction Velocity)',
     note: 'Its own site and its own codes. One code opens the six Reaction Velocity games and their Final Score board.'
+  },
+  'coach': {
+    label: '(Coach)',
+    note: 'Coach codes open the coach view — every player of the school, their speeds, chains and progress — on vreaction.com and in Cognitivo Gym. A game code never opens it, so no kid sees a ranking. Give the code the school (and, if the coach has one group, its category) exactly as on that school\'s game codes.'
   },
   'fortress-mobile': {
     label: '(Fortress Mobile)',
