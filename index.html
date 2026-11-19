@@ -118,7 +118,7 @@
       <button class="prod-tab active" id="tab-hooporia" onclick="switchProduct('hooporia')">🎯 Cognitivo Gym</button>
       <button class="prod-tab" id="tab-reaction-velocity" onclick="switchProduct('reaction-velocity')">⚡ Reaction Velocity</button>
       <!-- 📱 Reaction Mobile tab removed: phones use the normal Reaction Velocity code (vreaction.com/mobile.html is kept, unlinked) -->
-      <button class="prod-tab" id="tab-fortress-mobile" onclick="switchProduct('fortress-mobile')">🧩 Fortress Mobile</button>
+      <button class="prod-tab" id="tab-fortress-mobile" onclick="switchProduct('fortress-mobile')">📱 Hooporia Mobi</button>
       <button class="prod-tab" id="tab-coach" onclick="switchProduct('coach')">🧑‍🏫 Coach</button>
     </div>
     <div class="prod-note" id="prod-note"></div>
@@ -181,7 +181,9 @@
 //    reaction-velocity — Reaction Velocity (repo reaction-velocity).
 //                      Its own access page and its own codes: one
 //                      code opens its six games and Final Score.
-//    fortress-mobile — The Fortress Mobile. Still its own separate
+//    fortress-mobile — Hooporia Mobi (hooporia.mobi, repo fortress-MOBI).
+//                      The product key keeps its old name so every code
+//                      already issued keeps working. Still its own separate
 //                      site with its own separate gate.
 //    coach           — coach codes: open the coach view (the school's
 //                      players, speeds, chains, progress) on vreaction.com
@@ -222,8 +224,8 @@ var PRODUCTS = {
     note: 'Coach codes open the coach view — every player of the school, their speeds, chains and progress — on vreaction.com and in Cognitivo Gym. A game code never opens it, so no kid sees a ranking. Give the code the school (and, if the coach has one group, its category) exactly as on that school\'s game codes.'
   },
   'fortress-mobile': {
-    label: '(Fortress Mobile)',
-    note: 'Separate site, separate gate. A device stays unlocked once a code is entered, so an expiry here will not lock a device that already got in.'
+    label: '(Hooporia Mobi)',
+    note: 'hooporia.mobi — the mobile gym (Fortress, Recall, Recognition, Replay). One code opens the site; a sign-in lasts until the browser is closed, like vreaction.com. Give the code the school name exactly as on that school\'s other codes; the school keeps its own Fortress board.'
   }
 };
 
@@ -356,7 +358,7 @@ var STANDINGS_BY_PRODUCT = {
     { name: 'Final Score', table: 'reaction_velocity_standings' }
   ],
   'fortress-mobile': [
-    { name: 'The Fortress (Mobile)', table: 'ritnome_mobile_fortress_standings' }
+    { name: 'The Fortress (Hooporia Mobi)', table: 'ritnome_mobile_fortress_standings' }
   ]
 };
 
