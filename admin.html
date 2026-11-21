@@ -176,10 +176,16 @@
       <div class="pl-top">
         <div><label for="pl-school">School</label><select id="pl-school" onchange="loadPlayers()"></select></div>
         <button class="refresh" onclick="loadPlayerSchools()">↻ Refresh</button>
+        <button class="pl-btn" id="sc-ren-btn" onclick="scRenOpen()">✏️ Rename school</button>
+        <span id="sc-ren" style="display:none">
+          <input class="pl-name-in" id="sc-in" style="width:220px" maxlength="60" onkeydown="if(event.key==='Enter')scRenSave();if(event.key==='Escape')scRenClose()">
+          <button class="pl-btn save" onclick="scRenSave()">Save</button><button class="pl-btn" onclick="scRenClose()">Cancel</button>
+        </span>
       </div>
       <div class="pl-note"><b>Rename</b> changes the name on every game at this school — renaming onto a name already on the list joins the two into one player.
         <b>Hide</b> takes a player off every board, the Coach View and My Progress; their runs stay on file and <b>Show</b> brings them back.
-        <b>Delete</b> takes a player out of the system for good — every run, on every game, at this school.</div>
+        <b>Delete</b> takes a player out of the system for good — every run, on every game, at this school.
+        <b>Rename school</b> changes the school's name everywhere at once — every code, the school list and every saved run; tablets then sign in again with their code.</div>
       <table>
         <thead><tr><th>Player</th><th>Ritnome BPM</th><th>Reactific</th><th>Swipe It · Encadena</th><th>Memory</th><th>Last played</th><th>Actions</th></tr></thead>
         <tbody id="pl-rows"><tr><td colspan="7" class="empty">Pick a school.</td></tr></tbody>
@@ -393,6 +399,27 @@ window.plSave = async function(i){
     var n = await adminRpc('players_admin_rename', { p_school: $('pl-school').value, p_from: p.name, p_to: to });
     await loadPlayers();
     plMsg((joins ? p.name + ' joined ' + to : p.name + ' is now ' + to) + ' — ' + n + ' run' + (n === 1 ? '' : 's') + ' updated.');
+  }catch(e){ plMsg(e.message, true); }
+};
+window.scRenOpen = function(){
+  var cur = $('pl-school').value;
+  if (cur === '__pick' || cur === ''){ plMsg(cur === '' ? 'Runs with no school cannot be renamed — pick a school.' : 'Pick the school to rename first.', true); return; }
+  $('sc-ren-btn').style.display = 'none'; $('sc-ren').style.display = 'inline';
+  $('sc-in').value = cur; $('sc-in').focus(); $('sc-in').select();
+};
+window.scRenClose = function(){ $('sc-ren').style.display = 'none'; $('sc-ren-btn').style.display = ''; };
+window.scRenSave = async function(){
+  var from = $('pl-school').value, to = ($('sc-in').value || '').trim();
+  if (!to){ plMsg('The new name cannot be empty.', true); return; }
+  if (to === from){ scRenClose(); return; }
+  var joins = Array.prototype.some.call($('pl-school').options, function(o){ return o.value === to; });
+  plMsg('Renaming…');
+  try{
+    var d = await adminRpc('players_admin_rename_school', { p_from: from, p_to: to }) || {};
+    scRenClose();
+    var keep = $('pl-school'); await loadPlayerSchools(); keep.value = to; await loadPlayers();
+    await loadAllSchools(); fillAddSchools();
+    plMsg((joins ? from + ' joined ' + to : from + ' is now ' + to) + ' — ' + (d.codes||0) + ' code' + (d.codes === 1 ? '' : 's') + ' and ' + (d.runs||0) + ' run' + (d.runs === 1 ? '' : 's') + ' updated. Tablets sign in again with their code.');
   }catch(e){ plMsg(e.message, true); }
 };
 window.plDelete = async function(i){
