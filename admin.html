@@ -42,6 +42,11 @@
   .kid-out{margin-top:12px;display:none}
   .kid-out table{width:100%}
   .kid-out .code-cell{font-size:1rem}
+  .kid-pick{margin-top:10px;max-height:240px;overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px 10px;background:#0d1520;display:none}
+  .kid-pick label{display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:.88rem;cursor:pointer}
+  .kid-pick label.has{color:#5a6070;cursor:default}
+  .kid-pick .all{border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:4px;font-weight:800;color:#7fe8f5}
+  .kid-pick small{color:#5a6070;font-size:.72rem}
   .who-pill{display:block;margin-top:4px;font:700 .74rem Arial,sans-serif;color:#7fe8f5;letter-spacing:.02em}
 
   .add-title{font-size:.7rem;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#8892a0;margin-bottom:14px}
@@ -170,14 +175,16 @@
            The code carries the kid's name: no "Who's playing?", no list of classmates. -->
       <div class="add-card kid-card hidden" id="kid-card">
         <div class="add-title">👤 Player codes — one per kid, to practice at home</div>
-        <div class="pl-note" style="font-size:.78rem;color:#8892a0;line-height:1.5;margin-bottom:12px">Paste the class list, one name per line. Each kid gets their own code (their first name + 4 numbers, e.g. ANA-4821). At home they type it once — the game knows their name and school, with no list of classmates. Their runs show in the Coach View like any other.</div>
+        <div class="pl-note" style="font-size:.78rem;color:#8892a0;line-height:1.5;margin-bottom:12px">Paste the class list, one name per line. Each kid's code is their first name (e.g. ANA — if taken, ANAR with their last initial, then ANAR2). At home they type it once — the game knows their name and school, with no list of classmates. Their runs show in the Coach View like any other.</div>
         <div class="add-row">
-          <div class="af"><label>School Name</label><select id="k-school-pick" onchange="schoolPicked('k-school-pick','k-school')"></select><input id="k-school" placeholder="New school's name" maxlength="60" style="display:none;margin-top:6px"></div>
+          <div class="af"><label>School Name</label><select id="k-school-pick" onchange="schoolPicked('k-school-pick','k-school');loadKidPick()"></select><input id="k-school" placeholder="New school's name" maxlength="60" style="display:none;margin-top:6px"></div>
           <div class="af"><label>Category (optional)</label><select id="k-cat-pick" onchange="schoolPicked('k-cat-pick','k-cat')"></select><input id="k-cat" placeholder="New category, e.g. 5-6 años" maxlength="40" style="display:none;margin-top:6px"></div>
           <div class="af"><label>Devices per kid</label><select id="k-dev"><option value="2">2 — e.g. a tablet and a parent's phone</option><option value="1">1</option><option value="3">3</option></select></div>
           <div class="af"><label>Targets</label><select id="k-look"><option value="plain">● Plain circles (schools)</option><option value="">🏀 Basketballs (clubs)</option></select></div>
         </div>
-        <div class="af" style="margin-top:10px"><label>Names — one per line</label><textarea id="k-names" placeholder="Ana Rivera&#10;Luis Ortiz&#10;José Cruz"></textarea></div>
+        <div class="af" style="margin-top:10px"><label>Players already in the system at this school (from Cognitivo Gym and the games) — tick the ones to give a code</label>
+          <div class="kid-pick" id="kid-pick"></div><div style="font-size:.74rem;color:#5a6070;margin-top:4px" id="kid-pick-note">Pick a school to see its players.</div></div>
+        <div class="af" style="margin-top:10px"><label>New names — one per line (optional)</label><textarea id="k-names" placeholder="Ana R&#10;Luis&#10;José Cruz"></textarea></div>
         <button class="add-btn" style="margin-top:10px" onclick="makeKidCodes()">+ Make the codes</button>
         <div class="msg" id="kid-msg"></div>
         <div class="kid-out" id="kid-out">
@@ -710,25 +717,56 @@ function fillKid(){
     var el=$(x[0]); if(!el)return; var keep=el.value; el.innerHTML=x[1](); if(keep&&x[2](keep))el.value=keep; });
   $('kid-card').classList.toggle('hidden', currentProduct !== 'reaction-velocity');
 }
-// a kid's code: their first name (letters only, no accents, up to 10) + 4 numbers
-function kidCode(name){
-  var first = String(name).trim().split(/\s+/)[0].normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z]/g,'').slice(0,10) || 'KID';
-  return first + '-' + String(1000 + Math.floor(Math.random()*9000));
+// a kid's code: their first name — ANA. Taken? the first name + the last-name initial — ANAR;
+// then a number — ANAR2, ANA2 (the same order as vreaction.com's "New player? Join here")
+function kidCode(name, t){
+  var w = String(name).trim().split(/\s+/), clean = function(x){ return String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z]/g,''); };
+  var f = clean(w[0]).slice(0,12) || 'KID', i = clean(w[1]).slice(0,1);
+  return t === 1 ? f : i ? f + i + (t === 2 ? '' : String(t - 1)) : f + t;
 }
 var KID_MADE = [];
+// ☑ the players already saved at the chosen school (👥 Players' list), ticked to get a code;
+// a player who already has a code at this school shows greyed with it
+window.loadKidPick = async function(){
+  var box = $('kid-pick'), note = $('kid-pick-note'), school = $('k-school-pick').value;
+  box.style.display = 'none'; box.innerHTML = '';
+  if (!school || school === '__new'){ note.textContent = 'Pick a school to see its players.'; return; }
+  note.textContent = 'Loading…';
+  try{
+    var list = await adminRpc('players_admin_list', { p_school: school }) || [];
+    var has = {};                                                     // codes already made here
+    var r = await fetch(SUPABASE_URL + '/rest/v1/licenses?select=code,player_name&product=eq.reaction-velocity&player_name=not.is.null&school_name=eq.' + encodeURIComponent(school), { headers: authHeaders() });
+    var d = r.ok ? await r.json() : [];
+    (d || []).forEach(function(x){ has[kidKey(x.player_name)] = x.code; });
+    list = list.filter(function(p){ return !(p.hidden > 0 && p.hidden >= p.runs); });   // hidden players stay out
+    if (!list.length){ note.textContent = 'No players saved at this school yet — type new names below.'; return; }
+    var open = list.filter(function(p){ return !has[kidKey(p.name)]; }).length;
+    box.innerHTML = (open ? '<label class="all"><input type="checkbox" id="kid-all" onchange="kidAll(this.checked)"> Select all without a code (' + open + ')</label>' : '')
+      + list.map(function(p){ var c = has[kidKey(p.name)];
+          return c ? '<label class="has"><input type="checkbox" disabled> ' + esc(p.name) + ' <small>· has ' + esc(c) + '</small></label>'
+                   : '<label><input type="checkbox" class="kid-cb" value="' + esc(p.name) + '"> ' + esc(p.name) + ' <small>· ' + p.runs + ' run' + (p.runs === 1 ? '' : 's') + '</small></label>'; }).join('');
+    box.style.display = 'block';
+    note.textContent = list.length + ' player' + (list.length === 1 ? '' : 's') + ' at ' + school + (open < list.length ? ' · ' + (list.length - open) + ' already with a code' : '');
+  }catch(e){ note.textContent = e.message; }
+};
+window.kidAll = function(on){ document.querySelectorAll('#kid-pick .kid-cb').forEach(function(x){ x.checked = on; }); };
+function kidKey(n){ return String(n||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' '); }
 window.makeKidCodes = async function(){
-  var names = $('k-names').value.split(/\n/).map(function(x){ return x.trim().replace(/\s+/g,' ').slice(0,20); }).filter(Boolean);
+  var names = [], seen = {};   // the ticked players, then the typed names — each once
+  Array.prototype.map.call(document.querySelectorAll('#kid-pick .kid-cb:checked'), function(x){ return x.value; })
+    .concat($('k-names').value.split(/\n/)).map(function(x){ return x.trim().replace(/\s+/g,' ').slice(0,20); })
+    .forEach(function(n){ if (n && !seen[kidKey(n)]){ seen[kidKey(n)] = 1; names.push(n); } });
   var pickedSchool = schoolFrom('k-school-pick','k-school'), school = pickedSchool.name;
   var pickedCat = catFrom('k-cat-pick','k-cat'), category = pickedCat.name;
   function msg(t,c){ $('kid-msg').className='msg '+(c||''); $('kid-msg').textContent=t; }
   if (!school){ msg($('k-school-pick').value==='__new' ? 'Type the new school\'s name' : 'Choose a school','bad'); return; }
-  if (!names.length){ msg('Paste at least one name','bad'); return; }
+  if (!names.length){ msg('Tick a player or type a new name','bad'); return; }
   msg('Making ' + names.length + ' code' + (names.length>1?'s':'') + '…');
   var made = [], failed = [];
   for (var i = 0; i < names.length; i++){
     var ok = false;
-    for (var t = 0; t < 6 && !ok; t++){          // a code already taken: try other numbers
-      var code = kidCode(names[i]);
+    for (var t = 1; t <= 30 && !ok; t++){        // a code already taken: the next one in line
+      var code = kidCode(names[i], t);
       try{
         var r = await fetch(SUPABASE_URL + '/rest/v1/licenses', { method:'POST', headers: Object.assign({}, authHeaders(), { 'Prefer':'return=minimal' }),
           body: JSON.stringify({ code: code, school_name: school, category: category, player_name: names[i], max_devices: +$('k-dev').value || 2,
@@ -745,7 +783,7 @@ window.makeKidCodes = async function(){
   $('kid-out').style.display = KID_MADE.length ? 'block' : 'none';
   if (made.length) $('k-names').value = failed.length ? failed.map(function(f){ return f.replace(/ \(.*\)$/,''); }).join('\n') : '';
   msg('✓ ' + made.length + ' player code' + (made.length===1?'':'s') + ' made for ' + school + (failed.length ? ' — could not make: ' + failed.join(', ') : '') + '.', failed.length ? 'bad' : 'ok');
-  loadLicenses();
+  loadLicenses(); loadKidPick();
 };
 // a page of small cards to cut out and send home: the kid's name, their code, where to play
 window.printKidCards = function(){
