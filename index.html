@@ -35,6 +35,14 @@
   .prod-note b{color:#a8b3c4}
   #add-product-label,#list-product-label{color:#8892a0;font-weight:700;text-transform:none;letter-spacing:0;font-size:.85rem}
   .add-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:18px 20px;margin-bottom:22px}
+  /* 👤 Player codes (Reaction Velocity): one code per kid, for home */
+  .kid-card{border-color:rgba(0,229,255,.35);background:rgba(0,229,255,.04)}
+  .kid-card.hidden{display:none}
+  .kid-card textarea{width:100%;min-height:120px;padding:10px 12px;border-radius:8px;border:1.5px solid rgba(255,255,255,.18);background:#0d1520;color:#fff;font:600 .9rem Arial,sans-serif;resize:vertical}
+  .kid-out{margin-top:12px;display:none}
+  .kid-out table{width:100%}
+  .kid-out .code-cell{font-size:1rem}
+  .who-pill{display:block;margin-top:4px;font:700 .74rem Arial,sans-serif;color:#7fe8f5;letter-spacing:.02em}
 
   .add-title{font-size:.7rem;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#8892a0;margin-bottom:14px}
   .add-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
@@ -156,6 +164,26 @@
           <button class="add-btn" onclick="addLicense()">+ Add</button>
         </div>
         <div class="msg" id="add-msg"></div>
+      </div>
+
+      <!-- 👤 PLAYER CODES — Reaction Velocity only: one code per kid, to practice at home.
+           The code carries the kid's name: no "Who's playing?", no list of classmates. -->
+      <div class="add-card kid-card hidden" id="kid-card">
+        <div class="add-title">👤 Player codes — one per kid, to practice at home</div>
+        <div class="pl-note" style="font-size:.78rem;color:#8892a0;line-height:1.5;margin-bottom:12px">Paste the class list, one name per line. Each kid gets their own code (their first name + 4 numbers, e.g. ANA-4821). At home they type it once — the game knows their name and school, with no list of classmates. Their runs show in the Coach View like any other.</div>
+        <div class="add-row">
+          <div class="af"><label>School Name</label><select id="k-school-pick" onchange="schoolPicked('k-school-pick','k-school')"></select><input id="k-school" placeholder="New school's name" maxlength="60" style="display:none;margin-top:6px"></div>
+          <div class="af"><label>Category (optional)</label><select id="k-cat-pick" onchange="schoolPicked('k-cat-pick','k-cat')"></select><input id="k-cat" placeholder="New category, e.g. 5-6 años" maxlength="40" style="display:none;margin-top:6px"></div>
+          <div class="af"><label>Devices per kid</label><select id="k-dev"><option value="2">2 — e.g. a tablet and a parent's phone</option><option value="1">1</option><option value="3">3</option></select></div>
+          <div class="af"><label>Targets</label><select id="k-look"><option value="plain">● Plain circles (schools)</option><option value="">🏀 Basketballs (clubs)</option></select></div>
+        </div>
+        <div class="af" style="margin-top:10px"><label>Names — one per line</label><textarea id="k-names" placeholder="Ana Rivera&#10;Luis Ortiz&#10;José Cruz"></textarea></div>
+        <button class="add-btn" style="margin-top:10px" onclick="makeKidCodes()">+ Make the codes</button>
+        <div class="msg" id="kid-msg"></div>
+        <div class="kid-out" id="kid-out">
+          <table><thead><tr><th>Player</th><th>Code</th></tr></thead><tbody id="kid-rows"></tbody></table>
+          <button class="add-btn" style="margin-top:10px" onclick="printKidCards()">🖨 Print the cards</button>
+        </div>
       </div>
 
       <div class="list-head">
@@ -675,7 +703,65 @@ async function listCat(name){
     ALL_CATS.push(name); ALL_CATS.sort(catSort);
   }catch(e){}
 }
-function fillAddCats(){ var keep = $('a-cat-pick').value; $('a-cat-pick').innerHTML = catOptions(); if (keep && (keep==='__new' || ALL_CATS.indexOf(keep)!==-1)) $('a-cat-pick').value = keep; }
+function fillAddCats(){ var keep = $('a-cat-pick').value; $('a-cat-pick').innerHTML = catOptions(); if (keep && (keep==='__new' || ALL_CATS.indexOf(keep)!==-1)) $('a-cat-pick').value = keep; fillKid(); }
+// 👤 Player codes: the same school and category lists
+function fillKid(){
+  [['k-school-pick',function(){return schoolOptions()},function(v){return v==='__new'||ALL_SCHOOLS[v]}],['k-cat-pick',function(){return catOptions()},function(v){return v==='__new'||ALL_CATS.indexOf(v)!==-1}]].forEach(function(x){
+    var el=$(x[0]); if(!el)return; var keep=el.value; el.innerHTML=x[1](); if(keep&&x[2](keep))el.value=keep; });
+  $('kid-card').classList.toggle('hidden', currentProduct !== 'reaction-velocity');
+}
+// a kid's code: their first name (letters only, no accents, up to 10) + 4 numbers
+function kidCode(name){
+  var first = String(name).trim().split(/\s+/)[0].normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z]/g,'').slice(0,10) || 'KID';
+  return first + '-' + String(1000 + Math.floor(Math.random()*9000));
+}
+var KID_MADE = [];
+window.makeKidCodes = async function(){
+  var names = $('k-names').value.split(/\n/).map(function(x){ return x.trim().replace(/\s+/g,' ').slice(0,20); }).filter(Boolean);
+  var pickedSchool = schoolFrom('k-school-pick','k-school'), school = pickedSchool.name;
+  var pickedCat = catFrom('k-cat-pick','k-cat'), category = pickedCat.name;
+  function msg(t,c){ $('kid-msg').className='msg '+(c||''); $('kid-msg').textContent=t; }
+  if (!school){ msg($('k-school-pick').value==='__new' ? 'Type the new school\'s name' : 'Choose a school','bad'); return; }
+  if (!names.length){ msg('Paste at least one name','bad'); return; }
+  msg('Making ' + names.length + ' code' + (names.length>1?'s':'') + '…');
+  var made = [], failed = [];
+  for (var i = 0; i < names.length; i++){
+    var ok = false;
+    for (var t = 0; t < 6 && !ok; t++){          // a code already taken: try other numbers
+      var code = kidCode(names[i]);
+      try{
+        var r = await fetch(SUPABASE_URL + '/rest/v1/licenses', { method:'POST', headers: Object.assign({}, authHeaders(), { 'Prefer':'return=minimal' }),
+          body: JSON.stringify({ code: code, school_name: school, category: category, player_name: names[i], max_devices: +$('k-dev').value || 2,
+                                 plain_targets: $('k-look').value === 'plain', active: true, product: 'reaction-velocity', notes: 'Player code' }) });
+        if (r.ok){ ok = true; made.push({ name: names[i], code: code }); }
+        else { var e = await r.json().catch(function(){ return {}; }); if (e.code !== '23505'){ failed.push(names[i] + (/player_name/.test(e.message||'') ? ' (run player-codes.sql first)' : '')); break; } }
+      }catch(err){ failed.push(names[i]); break; }
+    }
+  }
+  if ($('k-school-pick').value === '__new' && made.length) await listSchool(school);
+  if (pickedCat.isNew && made.length) await listCat(category);
+  KID_MADE = made.map(function(m){ return { name: m.name, code: m.code, school: school, category: category }; });
+  $('kid-rows').innerHTML = KID_MADE.map(function(m){ return '<tr><td>'+esc(m.name)+'</td><td class="code-cell">'+esc(m.code)+'</td></tr>'; }).join('');
+  $('kid-out').style.display = KID_MADE.length ? 'block' : 'none';
+  if (made.length) $('k-names').value = failed.length ? failed.map(function(f){ return f.replace(/ \(.*\)$/,''); }).join('\n') : '';
+  msg('✓ ' + made.length + ' player code' + (made.length===1?'':'s') + ' made for ' + school + (failed.length ? ' — could not make: ' + failed.join(', ') : '') + '.', failed.length ? 'bad' : 'ok');
+  loadLicenses();
+};
+// a page of small cards to cut out and send home: the kid's name, their code, where to play
+window.printKidCards = function(){
+  if (!KID_MADE.length) return;
+  var w = window.open('', '_blank'); if (!w) return;
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Player codes</title><style>'
+    + 'body{font-family:Arial,sans-serif;margin:16px}.g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}'
+    + '.c{border:2px dashed #999;border-radius:10px;padding:14px;text-align:center;break-inside:avoid}'
+    + '.n{font-size:1.1rem;font-weight:800}.k{font:900 1.5rem monospace;letter-spacing:.08em;margin:8px 0;color:#0a5c66}'
+    + '.s{font-size:.8rem;color:#444}.u{font-size:.85rem;font-weight:700;margin-top:6px}@media print{.np{display:none}}</style></head><body>'
+    + '<button class="np" onclick="print()" style="margin-bottom:12px;padding:8px 14px">🖨 Print</button><div class="g">'
+    + KID_MADE.map(function(m){ return '<div class="c"><div class="n">'+esc(m.name)+'</div><div class="k">'+esc(m.code)+'</div>'
+        + '<div class="s">'+esc(m.school)+(m.category?' · '+esc(m.category):'')+'</div><div class="u">vreaction.com</div></div>'; }).join('')
+    + '</div></body></html>');
+  w.document.close();
+};
 
 // a new school joins the official list
 async function listSchool(name){
@@ -810,7 +896,7 @@ function renderRows(data, tbody){
     }
 
     return '<tr>'
-      + '<td class="code-cell">'+esc(r.code)+'</td>'
+      + '<td class="code-cell">'+esc(r.code)+(r.player_name ? '<span class="who-pill">👤 '+esc(r.player_name)+'</span>' : '')+'</td>'
       + '<td>'+esc(r.school_name||'')+(r.category ? '<span class="pill cat">'+esc(r.category)+'</span>' : '')+(r.plain_targets ? '<span class="pill plain">● Plain circles</span>' : '')+'</td>'
       + '<td>'+expText+'</td>'
       + '<td>'+statusPill+'</td>'
