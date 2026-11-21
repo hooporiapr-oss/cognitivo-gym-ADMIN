@@ -348,7 +348,9 @@ window.loadPlayerSchools = async function(){
   try{
     var list = await adminRpc('players_admin_schools');
     sel.innerHTML = '<option value="__pick">Choose a school…</option>' + (list||[]).map(function(n){
-      return '<option value="' + esc(n) + '">' + (n ? esc(n) : '(no school)') + '</option>'; }).join('');
+      // a look-alike with a hidden extra space is marked, so you can pick the right one to join
+      var odd = n && (n !== n.trim() || /\s\s/.test(n));
+      return '<option value="' + esc(n) + '">' + (n ? esc(n.trim()) + (odd ? '  ⚠ extra space' : '') : '(no school)') + '</option>'; }).join('');
     if (keep && (list||[]).indexOf(keep) !== -1) sel.value = keep;
     else if ((list||[]).length === 1) sel.value = list[0];
     loadPlayers();
