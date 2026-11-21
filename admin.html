@@ -897,7 +897,7 @@ function renderRows(data, tbody){
 
     return '<tr>'
       + '<td class="code-cell">'+esc(r.code)+(r.player_name ? '<span class="who-pill">👤 '+esc(r.player_name)+'</span>' : '')+'</td>'
-      + '<td>'+esc(r.school_name||'')+(r.category ? '<span class="pill cat">'+esc(r.category)+'</span>' : '')+(r.plain_targets ? '<span class="pill plain">● Plain circles</span>' : '')+'</td>'
+      + '<td>'+esc(r.school_name||'')+(r.category ? '<span class="pill cat">'+esc(r.category)+'</span>' : '')+(r.plain_targets ? '<span class="pill plain">● Plain circles</span>' : '')+(r.allow_join ? '<span class="pill cat" style="background:rgba(0,229,255,.12);color:#7fe8f5">✋ Sign-up on</span>' : '')+'</td>'
       + '<td>'+expText+'</td>'
       + '<td>'+statusPill+'</td>'
       + '<td style="font-size:.82rem">'+devText+'</td>'
@@ -906,6 +906,7 @@ function renderRows(data, tbody){
         + '<button class="mini toggle" onclick="startEdit(\''+r.id+'\')">Edit</button>'
         + '<button class="mini renew" onclick="renew(\''+r.id+'\')">+1yr</button>'
         + (used > 0 ? '<button class="mini toggle" onclick="resetDevices(\''+esc(r.code)+'\')">Reset devices</button>' : '')
+        + (currentProduct === 'reaction-velocity' && !r.player_name ? '<button class="mini toggle" onclick="toggleJoin(\''+r.id+'\','+(r.allow_join?'false':'true')+')">'+(r.allow_join?'✋ Stop sign-up':'✋ Allow sign-up')+'</button>' : '')
         + '<button class="mini toggle" onclick="toggle(\''+r.id+'\','+(r.active?'false':'true')+')">'+(r.active?'Revoke':'Enable')+'</button>'
         + '<button class="mini del" onclick="del(\''+r.id+'\',\''+esc(r.code)+'\')">Delete</button>'
       + '</div></td>'
@@ -942,6 +943,17 @@ window.addLicense = async function(){
   }
 };
 function setAddMsg(m,c){ $('add-msg').className='msg '+c; $('add-msg').textContent=m; setTimeout(function(){ if($('add-msg').textContent===m) $('add-msg').textContent=''; }, 4000); }
+
+// ✋ Sign-up (Reaction Velocity school codes): families can use this code on vreaction.com's
+// "New player? Join here" to get each kid their own player code (player-join.sql)
+window.toggleJoin = async function(id, on){
+  try{
+    var r = await fetch(SUPABASE_URL + '/rest/v1/licenses?id=eq.' + encodeURIComponent(id), { method:'PATCH',
+      headers: Object.assign({}, authHeaders(), { 'Prefer':'return=minimal' }), body: JSON.stringify({ allow_join: on }) });
+    if (!r.ok){ var e = await r.json().catch(function(){ return {}; }); alert(/allow_join/.test(e.message||'') ? 'Run player-join.sql in Supabase first.' : (e.message || 'Could not change sign-up')); return; }
+    loadLicenses();
+  }catch(e){ alert('Connection problem — please try again'); }
+};
 
 window.startEdit = function(id){
   editingId = id;
