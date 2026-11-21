@@ -75,6 +75,21 @@
 
   .standings-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:18px 20px;margin-top:22px}
   .standings-card.hidden{display:none}
+  /* 👥 Players */
+  .pl-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:18px 20px}
+  .pl-card.hidden,#license-sections.hidden{display:none}
+  .pl-top{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px}
+  .pl-top label{display:block;font-size:.68rem;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#8892a0;margin-bottom:6px}
+  .pl-top select{min-width:260px;padding:10px 12px;border-radius:8px;border:1.5px solid rgba(255,255,255,.18);background:#0d1520;color:#fff;font-size:.9rem}
+  .pl-note{font-size:.78rem;color:#8892a0;line-height:1.5;margin-bottom:12px}
+  .pl-row.off td{opacity:.45}
+  .pl-row.off td:last-child{opacity:1}
+  .pl-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:.62rem;font-weight:900;letter-spacing:.06em;background:rgba(255,255,255,.08);color:#c8ccd4}
+  .pl-btn{padding:6px 11px;border-radius:7px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.05);color:#fff;font-size:.74rem;font-weight:800;cursor:pointer;margin:2px}
+  .pl-btn.hide{border-color:rgba(255,60,60,.35);color:#ff8888}
+  .pl-btn.show{border-color:rgba(0,217,165,.4);color:#00d9a5}
+  .pl-btn.save{border-color:rgba(0,217,165,.4);color:#00d9a5}
+  .pl-name-in{padding:7px 9px;border-radius:7px;border:1.5px solid rgba(0,217,165,.5);background:#0d1520;color:#fff;font-size:.9rem;width:160px}
   .standings-title{font-size:.7rem;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#8892a0;margin-bottom:14px}
   .standings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)}
   .standings-row:last-child{border-bottom:none}
@@ -120,6 +135,7 @@
       <!-- 📱 Reaction Mobile tab removed: phones use the normal Reaction Velocity code (vreaction.com/mobile.html is kept, unlinked) -->
       <button class="prod-tab" id="tab-fortress-mobile" onclick="switchProduct('fortress-mobile')">📱 Hooporia Mobi</button>
       <button class="prod-tab" id="tab-coach" onclick="switchProduct('coach')">🧑‍🏫 Coach</button>
+      <button class="prod-tab" id="tab-players" onclick="showPlayers()">👥 Players</button>
     </div>
     <div class="prod-note" id="prod-note"></div>
 
@@ -150,6 +166,21 @@
         </thead>
         <tbody id="rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
       </table>
+    </div>
+
+    <!-- 👥 PLAYERS — every player at a school, on every board: rename / hide / show -->
+    <div class="pl-card hidden" id="players-card">
+      <div class="pl-top">
+        <div><label for="pl-school">School</label><select id="pl-school" onchange="loadPlayers()"></select></div>
+        <button class="refresh" onclick="loadPlayerSchools()">↻ Refresh</button>
+      </div>
+      <div class="pl-note"><b>Rename</b> changes the name on every game at this school — renaming onto a name already on the list joins the two into one player.
+        <b>Hide</b> takes a player off every board, the Coach View and My Progress; their runs stay on file and <b>Show</b> brings them back.</div>
+      <table>
+        <thead><tr><th>Player</th><th>Ritnome BPM</th><th>Reactific</th><th>Swipe It · Encadena</th><th>Memory</th><th>Last played</th><th>Actions</th></tr></thead>
+        <tbody id="pl-rows"><tr><td colspan="7" class="empty">Pick a school.</td></tr></tbody>
+      </table>
+      <div class="msg" id="pl-msg"></div>
     </div>
 
     <div class="standings-card hidden" id="standings-card">
@@ -279,6 +310,93 @@ async function doRefresh(){
   }catch(e){ return false; }
 }
 
+// ── 👥 Players (players-admin.sql: players_admin_schools / _list / _rename / _hide) ──
+async function adminRpc(name, body){
+  var go = function(){ return fetch(SUPABASE_URL + '/rest/v1/rpc/' + name, { method:'POST', headers: authHeaders(), body: JSON.stringify(body||{}) }); };
+  var r = await go();
+  if (r.status === 401 && await doRefresh()) r = await go();
+  var d = await r.json().catch(function(){ return null; });
+  if (!r.ok){
+    var m = (d && d.message) || r.statusText;
+    if (/players_admin|PGRST202|Could not find the function/i.test(m + (d && d.code || ''))) m = 'Run players-admin.sql in Supabase first.';
+    throw new Error(m);
+  }
+  return d;
+}
+var plList = [], plEdit = null;
+function plMsg(t, bad){ $('pl-msg').className = 'msg' + (t ? (bad ? ' bad' : ' ok') : ''); $('pl-msg').textContent = t || ''; }
+window.showPlayers = function(){
+  Object.keys(PRODUCTS).forEach(function(p){ var el = $('tab-' + p); if (el) el.className = 'prod-tab'; });
+  $('tab-players').className = 'prod-tab active';
+  $('prod-note').innerHTML = 'Every player at a school, across every game. Pick the school, then rename, hide or show a player.';
+  $('license-sections').classList.add('hidden'); $('standings-card').classList.add('hidden'); $('players-card').classList.remove('hidden');
+  loadPlayerSchools();
+};
+window.loadPlayerSchools = async function(){
+  var sel = $('pl-school'), keep = sel.value;
+  plMsg('');
+  try{
+    var list = await adminRpc('players_admin_schools');
+    sel.innerHTML = '<option value="__pick">Choose a school…</option>' + (list||[]).map(function(n){
+      return '<option value="' + esc(n) + '">' + (n ? esc(n) : '(no school)') + '</option>'; }).join('');
+    if (keep && (list||[]).indexOf(keep) !== -1) sel.value = keep;
+    else if ((list||[]).length === 1) sel.value = list[0];
+    loadPlayers();
+  }catch(e){ sel.innerHTML = ''; $('pl-rows').innerHTML = '<tr><td colspan="7" class="empty">' + esc(e.message) + '</td></tr>'; }
+};
+window.loadPlayers = async function(){
+  var school = $('pl-school').value, tb = $('pl-rows');
+  plEdit = null;
+  if (school === '__pick' || school == null){ tb.innerHTML = '<tr><td colspan="7" class="empty">Pick a school.</td></tr>'; return; }
+  tb.innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
+  try{ plList = await adminRpc('players_admin_list', { p_school: school }) || []; renderPlayers(); }
+  catch(e){ tb.innerHTML = '<tr><td colspan="7" class="empty">' + esc(e.message) + '</td></tr>'; }
+};
+function plCount(p, keys){ var n = 0; keys.forEach(function(k){ n += (p.boards && p.boards[k]) || 0; }); return n ? n + ' run' + (n === 1 ? '' : 's') : '—'; }
+function renderPlayers(){
+  var tb = $('pl-rows');
+  if (!plList.length){ tb.innerHTML = '<tr><td colspan="7" class="empty">No players at this school yet.</td></tr>'; return; }
+  tb.innerHTML = plList.map(function(p, i){
+    var off = p.hidden > 0 && p.hidden >= p.runs;
+    var nm = plEdit === i
+      ? '<input class="pl-name-in" id="pl-in" maxlength="20" value="' + esc(p.name) + '" onkeydown="if(event.key===\'Enter\')plSave(' + i + ');if(event.key===\'Escape\'){plEdit=null;renderPlayers()}">'
+      : '<b>' + esc(p.name) + '</b>' + (off ? '<span class="pl-tag">HIDDEN</span>' : '');
+    var acts = plEdit === i
+      ? '<button class="pl-btn save" onclick="plSave(' + i + ')">Save</button><button class="pl-btn" onclick="plEdit=null;renderPlayers()">Cancel</button>'
+      : '<button class="pl-btn" onclick="plEdit=' + i + ';renderPlayers();var x=$(\'pl-in\');if(x){x.focus();x.select()}">Rename</button>'
+        + (off ? '<button class="pl-btn show" onclick="plHide(' + i + ',false)">Show</button>'
+               : '<button class="pl-btn hide" onclick="plHide(' + i + ',true)">Hide</button>');
+    var last = p.last ? new Date(p.last).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '—';
+    return '<tr class="pl-row' + (off ? ' off' : '') + '"><td>' + nm + '</td>'
+      + '<td>' + plCount(p, ['vr_reaction_speed_standings']) + '</td>'
+      + '<td>' + plCount(p, ['vr_reactific_standings']) + '</td>'
+      + '<td>' + plCount(p, ['vr_mobile_standings']) + '</td>'
+      + '<td>' + plCount(p, ['dynamic_memory_quarter_standings', 'ritnome_mobile_fortress_standings']) + '</td>'
+      + '<td>' + esc(last) + '</td><td>' + acts + '</td></tr>';
+  }).join('');
+}
+window.plSave = async function(i){
+  var p = plList[i], to = ($('pl-in').value || '').trim();
+  if (!to){ plMsg('The name cannot be empty.', true); return; }
+  if (to === p.name){ plEdit = null; renderPlayers(); return; }
+  var joins = plList.some(function(q, j){ return j !== i && q.name.toLowerCase() === to.toLowerCase(); });
+  plMsg('Saving…');
+  try{
+    var n = await adminRpc('players_admin_rename', { p_school: $('pl-school').value, p_from: p.name, p_to: to });
+    await loadPlayers();
+    plMsg((joins ? p.name + ' joined ' + to : p.name + ' is now ' + to) + ' — ' + n + ' run' + (n === 1 ? '' : 's') + ' updated.');
+  }catch(e){ plMsg(e.message, true); }
+};
+window.plHide = async function(i, hide){
+  var p = plList[i];
+  plMsg(hide ? 'Hiding…' : 'Showing…');
+  try{
+    await adminRpc('players_admin_hide', { p_school: $('pl-school').value, p_name: p.name, p_hidden: hide });
+    await loadPlayers();
+    plMsg(hide ? p.name + ' is hidden from every board, the Coach View and My Progress. Show brings them back.' : p.name + ' is back on the boards.');
+  }catch(e){ plMsg(e.message, true); }
+};
+
 function showLogin(){ $('login').style.display='block'; $('dash').style.display='none'; $('signout-btn').style.display='none'; }
 function showDash(){ $('login').style.display='none'; $('dash').style.display='block'; $('signout-btn').style.display='inline-block'; switchProduct(currentProduct); }
 
@@ -316,6 +434,7 @@ window.signOut = async function(){
 
 window.switchProduct = function(product){
   currentProduct = product;
+  $('tab-players').className = 'prod-tab'; $('players-card').classList.add('hidden'); $('license-sections').classList.remove('hidden');
   Object.keys(PRODUCTS).forEach(function(p){
     var el = $('tab-' + p);
     if (!el) return;
