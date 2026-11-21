@@ -89,6 +89,9 @@
   .pl-btn.hide{border-color:rgba(255,60,60,.35);color:#ff8888}
   .pl-btn.show{border-color:rgba(0,217,165,.4);color:#00d9a5}
   .pl-btn.save{border-color:rgba(0,217,165,.4);color:#00d9a5}
+  .pl-btn.del{border-color:rgba(255,30,60,.55);background:rgba(255,30,60,.12);color:#ff4d6a}
+  .pl-btn.del-yes{border-color:#ff1e3c;background:#ff1e3c;color:#fff}
+  .pl-sure{font-size:.74rem;color:#ff8888;font-weight:800;margin-right:4px}
   .pl-name-in{padding:7px 9px;border-radius:7px;border:1.5px solid rgba(0,217,165,.5);background:#0d1520;color:#fff;font-size:.9rem;width:160px}
   .standings-title{font-size:.7rem;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#8892a0;margin-bottom:14px}
   .standings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)}
@@ -175,7 +178,8 @@
         <button class="refresh" onclick="loadPlayerSchools()">↻ Refresh</button>
       </div>
       <div class="pl-note"><b>Rename</b> changes the name on every game at this school — renaming onto a name already on the list joins the two into one player.
-        <b>Hide</b> takes a player off every board, the Coach View and My Progress; their runs stay on file and <b>Show</b> brings them back.</div>
+        <b>Hide</b> takes a player off every board, the Coach View and My Progress; their runs stay on file and <b>Show</b> brings them back.
+        <b>Delete</b> takes a player out of the system for good — every run, on every game, at this school.</div>
       <table>
         <thead><tr><th>Player</th><th>Ritnome BPM</th><th>Reactific</th><th>Swipe It · Encadena</th><th>Memory</th><th>Last played</th><th>Actions</th></tr></thead>
         <tbody id="pl-rows"><tr><td colspan="7" class="empty">Pick a school.</td></tr></tbody>
@@ -323,7 +327,7 @@ async function adminRpc(name, body){
   }
   return d;
 }
-var plList = [], plEdit = null;
+var plList = [], plEdit = null, plDel = null;
 function plMsg(t, bad){ $('pl-msg').className = 'msg' + (t ? (bad ? ' bad' : ' ok') : ''); $('pl-msg').textContent = t || ''; }
 window.showPlayers = function(){
   Object.keys(PRODUCTS).forEach(function(p){ var el = $('tab-' + p); if (el) el.className = 'prod-tab'; });
@@ -346,7 +350,7 @@ window.loadPlayerSchools = async function(){
 };
 window.loadPlayers = async function(){
   var school = $('pl-school').value, tb = $('pl-rows');
-  plEdit = null;
+  plEdit = null; plDel = null;
   if (school === '__pick' || school == null){ tb.innerHTML = '<tr><td colspan="7" class="empty">Pick a school.</td></tr>'; return; }
   tb.innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
   try{ plList = await adminRpc('players_admin_list', { p_school: school }) || []; renderPlayers(); }
@@ -361,11 +365,15 @@ function renderPlayers(){
     var nm = plEdit === i
       ? '<input class="pl-name-in" id="pl-in" maxlength="20" value="' + esc(p.name) + '" onkeydown="if(event.key===\'Enter\')plSave(' + i + ');if(event.key===\'Escape\'){plEdit=null;renderPlayers()}">'
       : '<b>' + esc(p.name) + '</b>' + (off ? '<span class="pl-tag">HIDDEN</span>' : '');
-    var acts = plEdit === i
+    var acts = plDel === i
+      ? '<span class="pl-sure">Delete ' + esc(p.name) + ' and all ' + p.runs + ' run' + (p.runs === 1 ? '' : 's') + ' for good?</span>'
+        + '<button class="pl-btn del-yes" onclick="plDelete(' + i + ')">Yes, delete</button><button class="pl-btn" onclick="plDel=null;renderPlayers()">No</button>'
+      : plEdit === i
       ? '<button class="pl-btn save" onclick="plSave(' + i + ')">Save</button><button class="pl-btn" onclick="plEdit=null;renderPlayers()">Cancel</button>'
       : '<button class="pl-btn" onclick="plEdit=' + i + ';renderPlayers();var x=$(\'pl-in\');if(x){x.focus();x.select()}">Rename</button>'
         + (off ? '<button class="pl-btn show" onclick="plHide(' + i + ',false)">Show</button>'
-               : '<button class="pl-btn hide" onclick="plHide(' + i + ',true)">Hide</button>');
+               : '<button class="pl-btn hide" onclick="plHide(' + i + ',true)">Hide</button>')
+        + '<button class="pl-btn del" onclick="plEdit=null;plDel=' + i + ';renderPlayers()">Delete</button>';
     var last = p.last ? new Date(p.last).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '—';
     return '<tr class="pl-row' + (off ? ' off' : '') + '"><td>' + nm + '</td>'
       + '<td>' + plCount(p, ['vr_reaction_speed_standings']) + '</td>'
@@ -386,6 +394,15 @@ window.plSave = async function(i){
     await loadPlayers();
     plMsg((joins ? p.name + ' joined ' + to : p.name + ' is now ' + to) + ' — ' + n + ' run' + (n === 1 ? '' : 's') + ' updated.');
   }catch(e){ plMsg(e.message, true); }
+};
+window.plDelete = async function(i){
+  var p = plList[i];
+  plMsg('Deleting…');
+  try{
+    var n = await adminRpc('players_admin_delete', { p_school: $('pl-school').value, p_name: p.name });
+    await loadPlayers();
+    plMsg(p.name + ' is out of the system — ' + n + ' run' + (n === 1 ? '' : 's') + ' deleted.');
+  }catch(e){ plDel = null; renderPlayers(); plMsg(e.message, true); }
 };
 window.plHide = async function(i, hide){
   var p = plList[i];
